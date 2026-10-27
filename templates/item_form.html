@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% from "_forms.html" import field %}
+{% block title %}{{ 'Edit post' if editing else 'Post a found item' }} · Campus Lost &amp; Found{% endblock %}
+{% block content %}
+<div class="panel narrow">
+  <h1>{{ 'Edit your post' if editing else 'Post a found item' }}</h1>
+  <form method="post" novalidate>
+    {{ form.hidden_tag() }}
+    {{ field(form.title, placeholder="e.g. Blue water bottle") }}
+    <div class="row">
+      {{ field(form.category) }}
+      {{ field(form.found_date) }}
+    </div>
+    {{ field(form.location, placeholder="e.g. Library, 2nd floor") }}
+    {{ field(form.photo_url, placeholder="https://…", help="Optional. A link to a photo of the item.") }}
+    {{ field(form.description, rows=4, placeholder="Color, brand, anything that helps the owner recognize it. Leave out details only the owner would know.") }}
+    <div class="form-actions">
+      <button class="btn btn-primary" type="submit">{{ 'Save changes' if editing else 'Post item' }}</button>
+      <a class="btn btn-ghost" href="{{ url_for('item_detail', item_id=item.id) if editing else url_for('index') }}">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

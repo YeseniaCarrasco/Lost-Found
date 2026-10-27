@@ -5,13 +5,13 @@ from urllib.parse import urlparse
 
 from flask import (Flask, abort, flash, redirect, render_template, request,
                    url_for)
-from flask_login import (LoginManager, UserMixin, current_user,
+from flask_login import (LoginManager, UserMixin, current_user, login_required,
                          login_user, logout_user)
 from flask_wtf.csrf import CSRFProtect
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import db
-from forms import LoginForm, RegisterForm
+from forms import ItemForm, LoginForm, RegisterForm
 
 PER_PAGE = 12
 
@@ -49,6 +49,15 @@ def create_app():
 
     register_routes(app)
     return app
+
+
+def owned_item_or_abort(item_id):
+    item = db.get_db().execute("SELECT * FROM items WHERE id = ?", (item_id,)).fetchone()
+    if item is None:
+        abort(404)
+    if item["user_id"] != current_user.id:
+        abort(403)
+    return item
 
 
 def safe_next(target):
@@ -114,6 +123,63 @@ def register_routes(app):
             abort(404)
         return render_template("item_detail.html", item=item)
 
+    # ---------- posting ----------
+
+    @app.route("/items/new", methods=["GET", "POST"])
+    @login_required
+    def new_item():
+        form = ItemForm()
+        if form.validate_on_submit():
+            conn = db.get_db()
+            cur = conn.execute(
+                """INSERT INTO items (user_id, title, description, category, location,
+                                      found_date, photo_url)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (current_user.id, form.title.data.strip(), (form.description.data or "").strip(),
+                 form.category.data, form.location.data.strip(),
+                 form.found_date.data.isoformat(), (form.photo_url.data or "").strip()))
+            conn.commit()
+            flash("Thanks! Your found item is posted.", "success")
+            return redirect(url_for("item_detail", item_id=cur.lastrowid))
+        return render_template("item_form.html", form=form, editing=False)
+
+    @app.route("/items/<int:item_id>/edit", methods=["GET", "POST"])
+    @login_required
+    def edit_item(item_id):
+        item = owned_item_or_abort(item_id)
+        form = ItemForm()
+        if request.method == "GET":
+            form.title.data = item["title"]
+            form.category.data = item["category"]
+            form.location.data = item["location"]
+            form.found_date.data = date.fromisoformat(item["found_date"])
+            form.photo_url.data = item["photo_url"]
+            form.description.data = item["description"]
+        if form.validate_on_submit():
+            conn = db.get_db()
+            conn.execute(
+                """UPDATE items SET title = ?, description = ?, category = ?, location = ?,
+                                    found_date = ?, photo_url = ?
+                   WHERE id = ?""",
+                (form.title.data.strip(), (form.description.data or "").strip(),
+                 form.category.data, form.location.data.strip(),
+                 form.found_date.data.isoformat(), (form.photo_url.data or "").strip(),
+                 item_id))
+            conn.commit()
+            flash("Post updated.", "success")
+            return redirect(url_for("item_detail", item_id=item_id))
+        return render_template("item_form.html", form=form, editing=True, item=item)
+
+    @app.route("/items/<int:item_id>/delete", methods=["POST"])
+    @login_required
+    def delete_item(item_id):
+        owned_item_or_abort(item_id)
+        conn = db.get_db()
+        conn.execute("DELETE FROM items WHERE id = ?", (item_id,))
+        conn.commit()
+        flash("Post deleted.", "info")
+        return redirect(url_for("index"))
+
     # ---------- accounts ----------
 
     @app.route("/register", methods=["GET", "POST"])
@@ -157,6 +223,11 @@ def register_routes(app):
         logout_user()
         flash("You're logged out.", "info")
         return redirect(url_for("index"))
+
+    @app.errorhandler(403)
+    def forbidden(_e):
+        return render_template("error.html", code=403,
+                               message="That post belongs to someone else."), 403
 
     @app.errorhandler(404)
     def not_found(_e):
