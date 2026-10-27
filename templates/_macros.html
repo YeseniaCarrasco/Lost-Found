@@ -1,0 +1,31 @@
+{% macro photo(item, cls='') -%}
+  <img class="{{ cls }}" alt="{{ item.title }}" loading="lazy"
+       src="{{ item.photo_url or url_for('static', filename='placeholder.svg') }}"
+       onerror="this.onerror=null;this.src='{{ url_for('static', filename='placeholder.svg') }}'">
+{%- endmacro %}
+
+{% macro status_badge(item) -%}
+  {% if item.status == 'returned' %}
+    <span class="badge badge-returned">Returned</span>
+  {% else %}
+    <span class="badge badge-open">Unclaimed</span>
+  {% endif %}
+{%- endmacro %}
+
+{% macro card(item) -%}
+  <article class="card {{ 'is-returned' if item.status == 'returned' }}">
+    <a class="card-photo" href="{{ url_for('item_detail', item_id=item.id) }}">
+      {{ photo(item) }}
+      {{ status_badge(item) }}
+    </a>
+    <div class="card-body">
+      <h3><a href="{{ url_for('item_detail', item_id=item.id) }}">{{ item.title }}</a></h3>
+      <p class="meta">📍 {{ item.location }}</p>
+      <p class="meta">📅 {{ item.found_date | nicedate }} · {{ item.found_date | ago }}</p>
+      <p class="meta small">
+        <span class="chip">{{ item.category }}</span>
+        by {{ item.username }}
+      </p>
+    </div>
+  </article>
+{%- endmacro %}

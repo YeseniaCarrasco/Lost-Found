@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% from "_macros.html" import photo, status_badge with context %}
+{% block title %}{{ item.title }} · Campus Lost &amp; Found{% endblock %}
+{% block content %}
+<p><a href="{{ url_for('index') }}">← Back to all items</a></p>
+<div class="detail">
+  <div class="detail-photo">{{ photo(item) }}</div>
+  <div class="detail-info">
+    {{ status_badge(item) }}
+    <h1>{{ item.title }}</h1>
+    <dl>
+      <dt>Where</dt><dd>{{ item.location }}</dd>
+      <dt>When</dt><dd>{{ item.found_date | nicedate }} ({{ item.found_date | ago }})</dd>
+      <dt>Category</dt><dd>{{ item.category }}</dd>
+      <dt>Posted by</dt><dd>{{ item.username }}</dd>
+      {% if item.status == 'returned' and item.returned_at %}
+        <dt>Returned</dt><dd>{{ item.returned_at | nicedate }}</dd>
+      {% endif %}
+    </dl>
+    {% if item.description %}<p class="desc">{{ item.description }}</p>{% endif %}
+
+    {% if item.status == 'unclaimed' %}
+      <p class="hint">Is this yours? Contact <strong>{{ item.username }}</strong> or ask at Campus Safety and describe it to claim it.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
