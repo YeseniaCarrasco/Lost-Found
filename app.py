@@ -1,4 +1,5 @@
 """Campus Lost & Found — a small Flask + SQLite web app."""
+import bootstrap; bootstrap.ensure_dependencies()  # noqa: E401,E702  (must run before other imports)
 import os
 from datetime import date, datetime
 from urllib.parse import urlparse

@@ -3,6 +3,7 @@
 Run `python3 seed.py --reset` to wipe the local database and re-seed it.
 Every demo account uses the password  demo-pass-123
 """
+import bootstrap; bootstrap.ensure_dependencies()  # noqa: E401,E702  (must run before other imports)
 import sys
 from datetime import date, datetime, timedelta
 from urllib.parse import quote_plus
