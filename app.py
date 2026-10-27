@@ -9,6 +9,7 @@ from flask import (Flask, abort, flash, redirect, render_template, request,
 from flask_login import (LoginManager, UserMixin, current_user, login_required,
                          login_user, logout_user)
 from flask_wtf.csrf import CSRFError, CSRFProtect
+from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import db
@@ -40,10 +41,23 @@ def load_user(user_id):
 
 def create_app():
     app = Flask(__name__)
+    production = bool(os.environ.get("K_SERVICE"))  # set automatically on Cloud Run
     app.config.update(
         SECRET_KEY=os.environ.get("SECRET_KEY", "dev-only-change-me"),
-        DATABASE=os.path.join(app.instance_path, "lostfound.db"),
+        DATABASE=os.environ.get("DATABASE_PATH",
+                                os.path.join(app.instance_path, "lostfound.db")),
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SAMESITE="Lax",
+        SESSION_COOKIE_SECURE=production,
+        REMEMBER_COOKIE_HTTPONLY=True,
+        REMEMBER_COOKIE_SAMESITE="Lax",
+        REMEMBER_COOKIE_SECURE=production,
     )
+    if production and app.config["SECRET_KEY"] == "dev-only-change-me":
+        raise RuntimeError("Set the SECRET_KEY environment variable in production.")
+
+    # Cloud Run terminates HTTPS in front of the container.
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 
     login_manager.init_app(app)
     csrf.init_app(app)
@@ -292,6 +306,10 @@ def register_routes(app):
         logout_user()
         flash("You're logged out.", "info")
         return redirect(url_for("index"))
+
+    @app.route("/healthz")
+    def healthz():
+        return "ok"
 
     @app.errorhandler(CSRFError)
     def csrf_error(_e):
