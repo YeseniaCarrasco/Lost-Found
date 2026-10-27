@@ -7,7 +7,7 @@ from flask import (Flask, abort, flash, redirect, render_template, request,
                    url_for)
 from flask_login import (LoginManager, UserMixin, current_user, login_required,
                          login_user, logout_user)
-from flask_wtf.csrf import CSRFProtect
+from flask_wtf.csrf import CSRFError, CSRFProtect
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import db
@@ -292,6 +292,11 @@ def register_routes(app):
         flash("You're logged out.", "info")
         return redirect(url_for("index"))
 
+    @app.errorhandler(CSRFError)
+    def csrf_error(_e):
+        return render_template("error.html", code=400,
+                               message="That form expired. Go back, refresh the page, and try again."), 400
+
     @app.errorhandler(403)
     def forbidden(_e):
         return render_template("error.html", code=403,
@@ -301,6 +306,16 @@ def register_routes(app):
     def not_found(_e):
         return render_template("error.html", code=404,
                                message="We couldn't find that page. Maybe it got lost too?"), 404
+
+    @app.errorhandler(405)
+    def method_not_allowed(_e):
+        return render_template("error.html", code=405,
+                               message="That action isn't available from this page."), 405
+
+    @app.errorhandler(500)
+    def server_error(_e):
+        return render_template("error.html", code=500,
+                               message="Something went wrong on our end. Please try again."), 500
 
 
 app = create_app()
