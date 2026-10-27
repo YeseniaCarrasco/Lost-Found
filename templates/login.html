@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% from "_forms.html" import field %}
+{% block title %}Log in · Campus Lost &amp; Found{% endblock %}
+{% block content %}
+<div class="panel narrow">
+  <h1>Log in</h1>
+  <form method="post" novalidate>
+    {{ form.hidden_tag() }}
+    {{ field(form.username, autocomplete="username", autofocus=true) }}
+    {{ field(form.password, autocomplete="current-password") }}
+    {{ field(form.remember) }}
+    <div class="form-actions">
+      <button class="btn btn-primary" type="submit">Log in</button>
+    </div>
+  </form>
+  <p class="small">New here? <a href="{{ url_for('register') }}">Create an account</a>.</p>
+  <p class="small muted">Demo account: <code>maria.lopez</code> / <code>demo-pass-123</code></p>
+</div>
+{% endblock %}
