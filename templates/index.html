@@ -8,7 +8,32 @@
   </div>
 </section>
 
-<p class="results-count">{{ total }} item{{ '' if total == 1 else 's' }}</p>
+<form class="searchbar" method="get" action="{{ url_for('index') }}">
+  <input type="hidden" name="f" value="1">
+  <input type="search" name="q" value="{{ q }}" placeholder="Search: keys, hoodie, library…" aria-label="Search">
+  <select name="category" aria-label="Category">
+    <option value="">All categories</option>
+    {% for c in categories %}
+      <option value="{{ c }}" {{ 'selected' if c == category }}>{{ c }}</option>
+    {% endfor %}
+  </select>
+  <label class="check">
+    <input type="checkbox" name="unclaimed" value="1" {{ 'checked' if unclaimed_only }}
+           onchange="this.form.submit()">
+    Still unclaimed only
+  </label>
+  <button class="btn btn-primary" type="submit">Search</button>
+  {% if q or category or unclaimed_only %}
+    <a class="btn btn-ghost" href="{{ url_for('index', f=1) }}">Clear</a>
+  {% endif %}
+</form>
+
+<p class="results-count">
+  {{ total }} item{{ '' if total == 1 else 's' }}
+  {% if q %} matching “{{ q }}”{% endif %}
+  {% if category %} in {{ category }}{% endif %}
+  {% if unclaimed_only %} · unclaimed only{% endif %}
+</p>
 
 {% if items %}
   <div class="grid">
@@ -17,17 +42,17 @@
   {% if pages > 1 %}
     <nav class="pager">
       {% if page > 1 %}
-        <a class="btn btn-ghost" href="{{ url_for('index', page=page-1) }}">← Newer</a>
+        <a class="btn btn-ghost" href="{{ url_for('index', q=q, category=category, unclaimed='1' if unclaimed_only else '', f=1, page=page-1) }}">← Newer</a>
       {% endif %}
       <span>Page {{ page }} of {{ pages }}</span>
       {% if page < pages %}
-        <a class="btn btn-ghost" href="{{ url_for('index', page=page+1) }}">Older →</a>
+        <a class="btn btn-ghost" href="{{ url_for('index', q=q, category=category, unclaimed='1' if unclaimed_only else '', f=1, page=page+1) }}">Older →</a>
       {% endif %}
     </nav>
   {% endif %}
 {% else %}
   <div class="empty">
-    <p>Nothing has been posted yet.</p>
+    <p>Nothing found. Try a different search{% if unclaimed_only %}, or include returned items{% endif %}.</p>
   </div>
 {% endif %}
 {% endblock %}

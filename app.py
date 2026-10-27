@@ -11,9 +11,11 @@ from flask_wtf.csrf import CSRFProtect
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import db
-from forms import ItemForm, LoginForm, RegisterForm
+from forms import CATEGORIES, ItemForm, LoginForm, RegisterForm
 
 PER_PAGE = 12
+FILTER_COOKIE = "unclaimed_only"   # remembers the "still unclaimed" checkbox
+COOKIE_MAX_AGE = 60 * 60 * 24 * 90
 
 
 class User(UserMixin):
@@ -95,24 +97,60 @@ def register_routes(app):
             return f"{days // 7} week{'s' if days >= 14 else ''} ago"
         return f"{days // 30} months ago"
 
+    @app.context_processor
+    def inject_globals():
+        return {"categories": CATEGORIES}
+
     # ---------- browsing ----------
 
     @app.route("/")
     def index():
+        q = request.args.get("q", "").strip()
+        category = request.args.get("category", "")
         page = max(request.args.get("page", 1, type=int), 1)
+
+        # "f" marks a submitted filter form; otherwise fall back to the cookie.
+        if "f" in request.args:
+            unclaimed_only = request.args.get("unclaimed") == "1"
+        else:
+            unclaimed_only = request.cookies.get(FILTER_COOKIE) == "1"
+
+        where, params = [], []
+        if q:
+            like = "%" + q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+            where.append("(i.title LIKE ? ESCAPE '\\' OR i.description LIKE ? ESCAPE '\\'"
+                         " OR i.location LIKE ? ESCAPE '\\')")
+            params += [like, like, like]
+        if unclaimed_only:
+            where.append("i.status = 'unclaimed'")
+        if category in CATEGORIES:
+            where.append("i.category = ?")
+            params.append(category)
+        where_sql = ("WHERE " + " AND ".join(where)) if where else ""
+
         conn = db.get_db()
-        total = conn.execute("SELECT COUNT(*) FROM items").fetchone()[0]
+        total = conn.execute(f"SELECT COUNT(*) FROM items i {where_sql}", params).fetchone()[0]
         items = conn.execute(
-            """SELECT i.*, u.username FROM items i JOIN users u ON u.id = i.user_id
-               ORDER BY i.found_date DESC, i.id DESC
-               LIMIT ? OFFSET ?""",
-            (PER_PAGE, (page - 1) * PER_PAGE),
+            f"""SELECT i.*, u.username FROM items i JOIN users u ON u.id = i.user_id
+                {where_sql}
+                ORDER BY i.found_date DESC, i.id DESC
+                LIMIT ? OFFSET ?""",
+            params + [PER_PAGE, (page - 1) * PER_PAGE],
         ).fetchall()
         stats = conn.execute(
             "SELECT COUNT(*) AS total, SUM(status = 'unclaimed') AS open FROM items"
         ).fetchone()
-        return render_template("index.html", items=items, page=page, total=total,
-                               pages=max((total + PER_PAGE - 1) // PER_PAGE, 1), stats=stats)
+
+        resp = app.make_response(render_template(
+            "index.html", items=items, q=q, category=category,
+            unclaimed_only=unclaimed_only, page=page, total=total,
+            pages=max((total + PER_PAGE - 1) // PER_PAGE, 1), stats=stats,
+        ))
+        if "f" in request.args:
+            resp.set_cookie(FILTER_COOKIE, "1" if unclaimed_only else "0",
+                            max_age=COOKIE_MAX_AGE, samesite="Lax",
+                            httponly=True, secure=request.is_secure)
+        return resp
 
     @app.route("/items/<int:item_id>")
     def item_detail(item_id):
