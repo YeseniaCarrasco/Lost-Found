@@ -12,7 +12,19 @@
   {% endif %}
 {%- endmacro %}
 
-{% macro card(item) -%}
+{% macro owner_actions(item, next=None) -%}
+  <form method="post" action="{{ url_for('toggle_status', item_id=item.id) }}" class="inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+    {% if item.status == 'unclaimed' %}
+      <button class="btn btn-success btn-sm" type="submit">Mark as returned</button>
+    {% else %}
+      <button class="btn btn-ghost btn-sm" type="submit">Mark unclaimed</button>
+    {% endif %}
+  </form>
+{%- endmacro %}
+
+{% macro card(item, show_owner_actions=False) -%}
   <article class="card {{ 'is-returned' if item.status == 'returned' }}">
     <a class="card-photo" href="{{ url_for('item_detail', item_id=item.id) }}">
       {{ photo(item) }}
@@ -24,8 +36,14 @@
       <p class="meta">📅 {{ item.found_date | nicedate }} · {{ item.found_date | ago }}</p>
       <p class="meta small">
         <span class="chip">{{ item.category }}</span>
-        by {{ item.username }}
+        by <a href="{{ url_for('user_page', username=item.username) }}">{{ item.username }}</a>
       </p>
+      {% if show_owner_actions %}
+        <div class="card-actions">
+          {{ owner_actions(item, next=request.path) }}
+          <a class="btn btn-ghost btn-sm" href="{{ url_for('edit_item', item_id=item.id) }}">Edit</a>
+        </div>
+      {% endif %}
     </div>
   </article>
 {%- endmacro %}

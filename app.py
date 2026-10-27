@@ -1,6 +1,6 @@
 """Campus Lost & Found — a small Flask + SQLite web app."""
 import os
-from datetime import date
+from datetime import date, datetime
 from urllib.parse import urlparse
 
 from flask import (Flask, abort, flash, redirect, render_template, request,
@@ -123,6 +123,19 @@ def register_routes(app):
             abort(404)
         return render_template("item_detail.html", item=item)
 
+    @app.route("/u/<username>")
+    def user_page(username):
+        conn = db.get_db()
+        user = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+        if user is None:
+            abort(404)
+        items = conn.execute(
+            """SELECT i.*, u.username FROM items i JOIN users u ON u.id = i.user_id
+               WHERE i.user_id = ? ORDER BY i.found_date DESC, i.id DESC""",
+            (user["id"],)).fetchall()
+        returned = sum(1 for i in items if i["status"] == "returned")
+        return render_template("user.html", user=user, items=items, returned=returned)
+
     # ---------- posting ----------
 
     @app.route("/items/new", methods=["GET", "POST"])
@@ -170,6 +183,23 @@ def register_routes(app):
             return redirect(url_for("item_detail", item_id=item_id))
         return render_template("item_form.html", form=form, editing=True, item=item)
 
+    @app.route("/items/<int:item_id>/status", methods=["POST"])
+    @login_required
+    def toggle_status(item_id):
+        item = owned_item_or_abort(item_id)
+        conn = db.get_db()
+        if item["status"] == "unclaimed":
+            conn.execute("UPDATE items SET status = 'returned', returned_at = ? WHERE id = ?",
+                         (datetime.now().isoformat(timespec="seconds"), item_id))
+            flash(f"Marked “{item['title']}” as returned. Nice work!", "success")
+        else:
+            conn.execute("UPDATE items SET status = 'unclaimed', returned_at = NULL WHERE id = ?",
+                         (item_id,))
+            flash(f"“{item['title']}” is back to unclaimed.", "info")
+        conn.commit()
+        return redirect(safe_next(request.form.get("next"))
+                        or url_for("item_detail", item_id=item_id))
+
     @app.route("/items/<int:item_id>/delete", methods=["POST"])
     @login_required
     def delete_item(item_id):
@@ -178,7 +208,7 @@ def register_routes(app):
         conn.execute("DELETE FROM items WHERE id = ?", (item_id,))
         conn.commit()
         flash("Post deleted.", "info")
-        return redirect(url_for("index"))
+        return redirect(url_for("user_page", username=current_user.username))
 
     # ---------- accounts ----------
 

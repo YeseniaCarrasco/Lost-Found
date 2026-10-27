@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import photo, status_badge with context %}
+{% from "_macros.html" import photo, status_badge, owner_actions with context %}
 {% block title %}{{ item.title }} · Campus Lost &amp; Found{% endblock %}
 {% block content %}
 <p><a href="{{ url_for('index') }}">← Back to all items</a></p>
@@ -12,7 +12,7 @@
       <dt>Where</dt><dd>{{ item.location }}</dd>
       <dt>When</dt><dd>{{ item.found_date | nicedate }} ({{ item.found_date | ago }})</dd>
       <dt>Category</dt><dd>{{ item.category }}</dd>
-      <dt>Posted by</dt><dd>{{ item.username }}</dd>
+      <dt>Posted by</dt><dd><a href="{{ url_for('user_page', username=item.username) }}">{{ item.username }}</a></dd>
       {% if item.status == 'returned' and item.returned_at %}
         <dt>Returned</dt><dd>{{ item.returned_at | nicedate }}</dd>
       {% endif %}
@@ -23,6 +23,7 @@
       <div class="owner-box">
         <p class="small">This is your post.</p>
         <div class="card-actions">
+          {{ owner_actions(item) }}
           <a class="btn btn-ghost btn-sm" href="{{ url_for('edit_item', item_id=item.id) }}">Edit</a>
           <form method="post" action="{{ url_for('delete_item', item_id=item.id) }}" class="inline"
                 onsubmit="return confirm('Delete this post for good?');">

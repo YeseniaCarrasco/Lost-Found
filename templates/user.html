@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% from "_macros.html" import card with context %}
+{% block title %}{{ user.username }} · Campus Lost &amp; Found{% endblock %}
+{% block content %}
+{% set mine = current_user.is_authenticated and current_user.id == user.id %}
+<section class="profile">
+  <div class="avatar" aria-hidden="true">{{ user.username[0] | upper }}</div>
+  <div>
+    <h1>{{ 'My posts' if mine else user.username }}</h1>
+    <p class="muted">
+      {% if mine %}{{ user.username }} · {% endif %}Member since {{ user.created_at | nicedate }} ·
+      {{ items | length }} post{{ '' if items|length == 1 else 's' }} ·
+      {{ returned }} returned to their owners
+    </p>
+  </div>
+  {% if mine %}<a class="btn btn-primary" href="{{ url_for('new_item') }}">+ Post found item</a>{% endif %}
+</section>
+
+{% if items %}
+  <div class="grid">
+    {% for item in items %}{{ card(item, show_owner_actions=mine) }}{% endfor %}
+  </div>
+{% else %}
+  <div class="empty">
+    <p>{{ 'You haven’t posted anything yet.' if mine else 'No posts yet.' }}</p>
+  </div>
+{% endif %}
+{% endblock %}
