@@ -1,4 +1,5 @@
-# Runs the pytest suite automatically so broken changes are caught early.
+# Runs the pytest suite on every pull request and push to main, and deploys
+# to Cloud Run after a push to main once the tests pass.
 name: Tests
 
 # When to run: on every pull request, and on every push to the main branch.
@@ -7,12 +8,13 @@ on:
   push:
     branches: [main]
 
-# The workflow only needs to read the code; it never writes or deploys anything.
+# Both jobs only need to read the code; Google Cloud access comes from the
+# GCP_CREDENTIALS secret, not from GitHub permissions.
 permissions:
   contents: read
 
 jobs:
-  # A single job named "test" on a fresh Ubuntu machine.
+  # Job 1: run the tests on a fresh Ubuntu machine.
   test:
     name: test
     runs-on: ubuntu-latest
@@ -39,3 +41,48 @@ jobs:
       # (set in tests/conftest.py), so no database service or real secrets are needed.
       - name: Run pytest
         run: python -m pytest
+
+  # Job 2: deploy to Cloud Run. Runs only for a push to main, and only if "test" passed.
+  deploy:
+    name: deploy
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # Never run two deploys at once; a newer push waits for the current deploy.
+    concurrency:
+      group: deploy-lost-found
+      cancel-in-progress: false
+
+    steps:
+      # Download this repository's code; it is the source that gets deployed.
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      # Install the gcloud command-line tool (no sign-in happens here).
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      # Write the service account key from the GCP_CREDENTIALS secret to a file in
+      # $RUNNER_TEMP, outside the repository folder, readable only by this runner user.
+      - name: Write key to temporary file
+        env:
+          GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+        run: |
+          umask 077
+          printf '%s' "$GCP_CREDENTIALS" > "$RUNNER_TEMP/gcp-key.json"
+
+      # Sign in to Google Cloud as the github-deployer service account using that file.
+      - name: Sign in to Google Cloud
+        run: gcloud auth activate-service-account --key-file="$RUNNER_TEMP/gcp-key.json"
+
+      # Build the app from source with Cloud Build and deploy it to the lost-found service.
+      # Existing settings (such as the SECRET_KEY env var and public access) are kept.
+      - name: Deploy to Cloud Run
+        run: gcloud run deploy lost-found --source . --project my-signup31 --region us-west1 --quiet
+
+      # Always delete the key file and sign out, even if an earlier step failed.
+      - name: Remove key file
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/gcp-key.json"
+          gcloud auth revoke --all --quiet || true
